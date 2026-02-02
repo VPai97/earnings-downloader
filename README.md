@@ -1,6 +1,9 @@
-# Earnings Call Transcript Downloader
+# Earnings Document Downloader
 
-Interactive CLI tool to download earnings call transcripts and investor presentations for Indian companies from Screener.in.
+Interactive CLI tool to download earnings documents for Indian companies:
+- **Earnings call transcripts**
+- **Investor presentations**
+- **Press releases / fact sheets**
 
 ## Installation
 
@@ -21,21 +24,21 @@ earnings
 
 ```
 Enter company name(s) (comma-separated for multiple)
-Companies: Reliance Industries, TCS, HDFC Bank
+Companies: Reliance Industries, TCS
 
 Options:
-  [1] Download transcripts only
-  [2] Download transcripts + investor presentations
+  [1] Download all documents (transcripts + presentations + press releases)
+  [2] Download transcripts only
   [3] Change output directory (current: ./downloads)
-  [4] Change transcript count (current: 4)
+  [4] Change quarters count (current: 5)
   [5] Exit
 ```
 
 ## Features
 
 - **Checks company IR websites first**, then falls back to Screener.in
-- Downloads 4 most recent quarterly earnings calls (configurable)
-- Supports investor presentations
+- Downloads **5 most recent quarters** by default (configurable)
+- Downloads **3 document types**: transcripts, presentations, press releases
 - Known IR pages for 25+ major Indian companies
 - Organizes files by company in subdirectories
 - Progress display with rich formatting
@@ -52,11 +55,9 @@ Options:
 ├── Reliance_Industries_Ltd/
 │   ├── Reliance_Industries_Ltd_Q3FY26_transcript.pdf
 │   ├── Reliance_Industries_Ltd_Q3FY26_presentation.pdf
-│   ├── Reliance_Industries_Ltd_Q2FY26_transcript.pdf
-│   └── ...
-├── TCS_Ltd/
-│   └── ...
-└── HDFC_Bank_Ltd/
+│   ├── Reliance_Industries_Ltd_Q3FY26_press_release.pdf
+│   └── ... (5 quarters worth)
+└── Infosys_Ltd/
     └── ...
 ```
 
@@ -71,7 +72,8 @@ earnings_downloader/
 ├── requirements.txt  # Python dependencies
 └── sources/
     ├── __init__.py
-    └── screener.py   # Screener.in scraper
+    ├── company_ir.py # Company IR website scraper (primary)
+    └── screener.py   # Screener.in scraper (fallback)
 ```
 
 ## Dependencies

@@ -67,7 +67,8 @@ def parse_quarter_year(text: str) -> tuple[Optional[str], Optional[str]]:
 def deduplicate_calls(calls: list[EarningsCall]) -> list[EarningsCall]:
     """Remove duplicate earnings calls, preferring certain sources."""
     seen = {}  # (company, quarter, year, doc_type) -> call
-    source_priority = {"screener": 0, "trendlyne": 1, "bse": 2}
+    # Prefer company IR pages over aggregators
+    source_priority = {"company_ir": 0, "screener": 1, "trendlyne": 2, "bse": 3}
 
     for call in calls:
         key = (call.company.lower(), call.quarter, call.year, call.doc_type)

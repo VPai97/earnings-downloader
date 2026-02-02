@@ -13,7 +13,7 @@ from rich.prompt import Prompt, Confirm
 from rich.table import Table
 
 from config import config
-from sources import ScreenerSource
+from sources import ScreenerSource, CompanyIRSource
 from downloader import Downloader
 from utils import EarningsCall, deduplicate_calls
 
@@ -78,7 +78,8 @@ def change_transcript_count():
 
 def search_and_download(companies: List[str], include_presentations: bool):
     """Search for companies and download their earnings calls."""
-    source = ScreenerSource()
+    ir_source = CompanyIRSource()
+    screener_source = ScreenerSource()
     downloader = Downloader()
     all_calls: List[EarningsCall] = []
 
@@ -88,11 +89,23 @@ def search_and_download(companies: List[str], include_presentations: bool):
     for company in companies:
         console.print(f"\n[cyan]Searching:[/cyan] {company}")
 
-        calls = source.get_earnings_calls(
+        # Try company IR website first
+        calls = ir_source.get_earnings_calls(
             company,
             count=config.transcripts_per_company,
             include_presentations=include_presentations
         )
+
+        # Fall back to Screener.in if not enough documents found
+        if len(calls) < config.transcripts_per_company:
+            if calls:
+                console.print(f"  [dim]Found {len(calls)} on IR site, checking Screener.in for more...[/dim]")
+            screener_calls = screener_source.get_earnings_calls(
+                company,
+                count=config.transcripts_per_company,
+                include_presentations=include_presentations
+            )
+            calls.extend(screener_calls)
 
         if calls:
             console.print(f"  [green]Found {len(calls)} document(s)[/green]")

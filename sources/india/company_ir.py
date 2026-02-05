@@ -1,17 +1,17 @@
-"""Company Investor Relations website source for earnings call transcripts."""
+"""Company Investor Relations website source for Indian company earnings documents."""
 
 import re
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
-import sys
-import os
+from collections import defaultdict
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from ..base import BaseSource, Region, FiscalYearType
+from ..registry import SourceRegistry
+from core.models import EarningsCall, normalize_company_name
 from config import config
-from utils import EarningsCall, normalize_company_name
+
 
 # Known IR page mappings for major Indian companies
 KNOWN_IR_PAGES = {
@@ -45,8 +45,13 @@ KNOWN_IR_PAGES = {
 }
 
 
-class CompanyIRSource:
+class CompanyIRSource(BaseSource):
     """Fetches earnings call data from company investor relations websites."""
+
+    region = Region.INDIA
+    fiscal_year_type = FiscalYearType.INDIAN
+    source_name = "company_ir"
+    priority = 0  # Highest priority - prefer official sources
 
     def __init__(self):
         self.session = requests.Session()
@@ -56,27 +61,30 @@ class CompanyIRSource:
             "Accept-Language": "en-US,en;q=0.5",
         })
 
+    def search_company(self, query: str) -> Optional[dict]:
+        """Search for company - only returns info for known companies."""
+        ir_url = self._find_ir_page(query)
+        if ir_url:
+            return {
+                "name": query,
+                "url": ir_url,
+                "source": self.source_name,
+                "region": self.region.value
+            }
+        return None
+
     def _find_ir_page(self, company_name: str) -> Optional[str]:
         """Find the investor relations page URL for a company."""
         normalized = normalize_company_name(company_name).lower()
 
-        # Check known mappings
         for key, url in KNOWN_IR_PAGES.items():
             if key in normalized or normalized in key:
                 return url
 
-        # Try to search for IR page
-        try:
-            search_url = f"https://www.google.com/search?q={company_name}+investor+relations+india"
-            # Note: Google search scraping is unreliable, so we'll rely on known mappings
-            # and return None for unknown companies
-            return None
-        except Exception:
-            return None
+        return None
 
     def _extract_quarter_from_text(self, text: str) -> Tuple[str, str]:
         """Extract quarter and year from text."""
-        # Month to quarter mapping (Indian FY)
         month_to_quarter = {
             "jan": ("Q3", lambda y: f"FY{(int(y) % 100):02d}"),
             "feb": ("Q3", lambda y: f"FY{(int(y) % 100):02d}"),
@@ -92,7 +100,6 @@ class CompanyIRSource:
             "dec": ("Q3", lambda y: f"FY{((int(y) + 1) % 100):02d}"),
         }
 
-        # Try Q format first
         q_match = re.search(r'Q([1-4])\s*(?:FY)?[\'"]?(\d{2,4})', text, re.IGNORECASE)
         if q_match:
             quarter = f"Q{q_match.group(1)}"
@@ -100,7 +107,6 @@ class CompanyIRSource:
             year = f"FY{year_str}" if len(year_str) == 2 else f"FY{int(year_str) % 100:02d}"
             return quarter, year
 
-        # Try month-year format
         month_match = re.search(
             r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*[\s,.-]+(\d{4})',
             text, re.IGNORECASE
@@ -127,8 +133,7 @@ class CompanyIRSource:
 
         ir_url = self._find_ir_page(company_name)
         if not ir_url:
-            print(f"  No known IR page for {company_name}, will use Screener.in")
-            return calls
+            return calls  # Silent return - Screener will be used as fallback
 
         print(f"  Checking IR page: {ir_url}")
 
@@ -138,7 +143,6 @@ class CompanyIRSource:
             soup = BeautifulSoup(resp.text, "html.parser")
             base_url = f"{urlparse(ir_url).scheme}://{urlparse(ir_url).netloc}"
 
-            # Find all PDF links that might be transcripts, presentations, or press releases
             all_links = soup.find_all("a", href=True)
             seen_urls = set()
 
@@ -146,11 +150,9 @@ class CompanyIRSource:
                 href = link.get("href", "")
                 text = link.get_text(" ", strip=True).lower()
 
-                # Get parent context
                 parent = link.find_parent(["li", "tr", "div", "p"])
                 context = parent.get_text(" ", strip=True) if parent else text
 
-                # Check document type
                 is_transcript = any(kw in text or kw in href.lower() for kw in [
                     "transcript", "concall", "con-call", "conference call",
                     "earnings call", "analyst call", "investor call"
@@ -166,7 +168,6 @@ class CompanyIRSource:
                     "financial result", "results announcement", "outcome"
                 ])
 
-                # Determine doc_type and check if we should include it
                 doc_type = None
                 if is_transcript and include_transcripts:
                     doc_type = "transcript"
@@ -178,7 +179,6 @@ class CompanyIRSource:
                 if not doc_type:
                     continue
 
-                # Build full URL
                 if href.startswith("http"):
                     full_url = href
                 elif href.startswith("/"):
@@ -190,7 +190,6 @@ class CompanyIRSource:
                     continue
                 seen_urls.add(full_url)
 
-                # Extract quarter info
                 quarter, year = self._extract_quarter_from_text(context)
                 if not quarter:
                     quarter, year = self._extract_quarter_from_text(href)
@@ -203,19 +202,17 @@ class CompanyIRSource:
                     year=year,
                     doc_type=doc_type,
                     url=full_url,
-                    source="company_ir"
+                    source=self.source_name
                 ))
 
         except Exception as e:
             print(f"  Error fetching IR page: {e}")
             return calls
 
-        # Sort by quarter (most recent first) and limit
         return self._limit_by_quarter(calls, count)
 
     def _limit_by_quarter(self, calls: List[EarningsCall], count: int) -> List[EarningsCall]:
         """Limit results to specified number of quarters."""
-        from collections import defaultdict
         by_quarter = defaultdict(list)
 
         for call in calls:
@@ -235,3 +232,7 @@ class CompanyIRSource:
             result.extend(by_quarter[quarter_key])
 
         return result
+
+
+# Auto-register when module is imported
+SourceRegistry.register(CompanyIRSource())

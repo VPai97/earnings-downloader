@@ -1,10 +1,24 @@
-"""Data sources for earnings call transcripts."""
+"""Data sources for earnings documents."""
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from .base import BaseSource, Region, FiscalYearType
+from .registry import SourceRegistry
 
-from sources.screener import ScreenerSource
-from sources.company_ir import CompanyIRSource
+# Import regional sources (auto-registers them)
+from .india import ScreenerSource, CompanyIRSource
+from .us import EdgarSource
+from .japan import TdnetSource
+from .korea import DartSource
+from .china import CninfoSource
 
-__all__ = ["ScreenerSource", "CompanyIRSource"]
+__all__ = [
+    "BaseSource",
+    "Region",
+    "FiscalYearType",
+    "SourceRegistry",
+    "ScreenerSource",
+    "CompanyIRSource",
+    "EdgarSource",
+    "TdnetSource",
+    "DartSource",
+    "CninfoSource",
+]

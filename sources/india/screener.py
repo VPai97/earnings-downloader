@@ -1,21 +1,25 @@
-"""Screener.in data source for earnings call transcripts."""
+"""Screener.in data source for Indian company earnings documents."""
 
 import re
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Optional
-from urllib.parse import urljoin, quote
+from urllib.parse import urljoin
+from collections import defaultdict
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from ..base import BaseSource, Region, FiscalYearType
+from ..registry import SourceRegistry
+from core.models import EarningsCall, normalize_company_name
 from config import config
-from utils import EarningsCall, normalize_company_name, parse_quarter_year
 
 
-class ScreenerSource:
-    """Fetches earnings call data from Screener.in."""
+class ScreenerSource(BaseSource):
+    """Fetches earnings call data from Screener.in (any Indian company)."""
+
+    region = Region.INDIA
+    fiscal_year_type = FiscalYearType.INDIAN
+    source_name = "screener"
+    priority = 1  # Fallback to company_ir
 
     BASE_URL = "https://www.screener.in"
     SEARCH_URL = "https://www.screener.in/api/company/search/"
@@ -28,9 +32,9 @@ class ScreenerSource:
             "Accept-Language": "en-US,en;q=0.5",
         })
 
-    def search_company(self, company_name: str) -> Optional[str]:
-        """Search for company and return its page URL."""
-        normalized = normalize_company_name(company_name)
+    def search_company(self, query: str) -> Optional[dict]:
+        """Search for company and return its info."""
+        normalized = normalize_company_name(query)
         try:
             resp = self.session.get(
                 self.SEARCH_URL,
@@ -43,9 +47,13 @@ class ScreenerSource:
             if not results:
                 return None
 
-            # Return first match
             first = results[0]
-            return urljoin(self.BASE_URL, first.get("url", ""))
+            return {
+                "name": first.get("name", query),
+                "url": urljoin(self.BASE_URL, first.get("url", "")),
+                "source": self.source_name,
+                "region": self.region.value
+            }
 
         except Exception as e:
             print(f"  Search error: {e}")
@@ -63,13 +71,14 @@ class ScreenerSource:
         calls = []
 
         # Search for company
-        company_url = self.search_company(company_name)
-        if not company_url:
+        company_info = self.search_company(company_name)
+        if not company_info:
             print(f"  Company not found on Screener.in: {company_name}")
             return calls
 
+        company_url = company_info["url"]
+
         try:
-            # Fetch company page
             resp = self.session.get(company_url, timeout=config.request_timeout)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -96,28 +105,23 @@ class ScreenerSource:
         except Exception as e:
             print(f"  Error fetching from Screener.in: {e}")
 
-        # Apply limit based on quarters
         return self._limit_by_quarter(calls, count)
 
     def _find_concall_section(self, soup: BeautifulSoup) -> Optional[BeautifulSoup]:
         """Find the concalls/documents section."""
-        # Primary: find the documents section by ID
         doc_section = soup.find(id="documents")
         if doc_section:
             return doc_section
 
-        # Fallback: look for section with document-related ID
         doc_section = soup.find("section", {"id": re.compile(r"document|concall", re.I)})
         if doc_section:
             return doc_section
 
-        # Try finding by class names
         for section in soup.find_all(["div", "section"]):
             classes = section.get("class", [])
             if any("concall" in c.lower() or "document" in c.lower() for c in classes):
                 return section
 
-        # Last resort: find parent of BSE/NSE PDF links
         all_links = soup.find_all("a", href=re.compile(r"(bseindia|nseindia).*\.pdf", re.I))
         if all_links:
             return all_links[0].find_parent("section") or all_links[0].find_parent("div")
@@ -153,8 +157,7 @@ class ScreenerSource:
         }
 
         def extract_date_info(text: str) -> tuple[str, str]:
-            """Extract quarter and fiscal year from text like 'Jan 2026' or 'Oct 2025'."""
-            # Try Q format first
+            """Extract quarter and fiscal year from text."""
             q_match = re.search(r'Q([1-4])\s*(?:FY)?(\d{2,4})', text, re.IGNORECASE)
             if q_match:
                 quarter = f"Q{q_match.group(1)}"
@@ -162,7 +165,6 @@ class ScreenerSource:
                 year = f"FY{year_str}" if len(year_str) == 2 else f"FY{int(year_str) % 100:02d}"
                 return quarter, year
 
-            # Try month-year format
             month_match = re.search(r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+(\d{4})', text, re.IGNORECASE)
             if month_match:
                 month = month_match.group(1).lower()
@@ -187,10 +189,9 @@ class ScreenerSource:
                 year=year,
                 doc_type=doc_type,
                 url=full_url,
-                source="screener"
+                source=self.source_name
             ))
 
-        # Find transcript links
         if include_transcripts:
             transcript_links = section.find_all("a", string=re.compile(r"transcript", re.I))
             for link in transcript_links:
@@ -198,7 +199,6 @@ class ScreenerSource:
                 context = parent_li.get_text(" ", strip=True) if parent_li else ""
                 add_call(link.get("href", ""), context, "transcript")
 
-        # Find presentation links
         if include_presentations:
             ppt_links = section.find_all("a", string=re.compile(r"ppt|presentation", re.I))
             for link in ppt_links:
@@ -206,22 +206,18 @@ class ScreenerSource:
                 context = parent_li.get_text(" ", strip=True) if parent_li else ""
                 add_call(link.get("href", ""), context, "presentation")
 
-        # Find press release / fact sheet links
         if include_press_releases:
-            # Look in announcements for press releases and outcome/results
             all_links = section.find_all("a", href=True)
             for link in all_links:
                 text = link.get_text(strip=True).lower()
                 href = link.get("href", "")
 
-                # Check for press release or fact sheet keywords
                 is_press_release = any(kw in text for kw in [
                     "press release", "press-release", "media release",
                     "fact sheet", "factsheet", "fact-sheet",
                     "financial result", "results announcement"
                 ])
 
-                # Also check parent context for quarterly result announcements
                 parent = link.find_parent("li") or link.find_parent("div")
                 parent_text = parent.get_text(" ", strip=True).lower() if parent else ""
 
@@ -234,28 +230,27 @@ class ScreenerSource:
         return calls
 
     def _limit_by_quarter(self, calls: List[EarningsCall], count: int) -> List[EarningsCall]:
-        """Limit results to specified number of quarters, keeping both types."""
-        # Group by quarter
-        from collections import defaultdict
+        """Limit results to specified number of quarters."""
         by_quarter = defaultdict(list)
 
         for call in calls:
             quarter_key = (call.quarter, call.year)
             by_quarter[quarter_key].append(call)
 
-        # Sort quarters (most recent first based on year then quarter)
         def quarter_sort_key(q):
             quarter, year = q
-            # Extract numeric parts
             q_num = int(quarter[1]) if quarter.startswith("Q") else 0
             y_num = int(year[2:]) if year.startswith("FY") else 0
             return (-y_num, -q_num)
 
         sorted_quarters = sorted(by_quarter.keys(), key=quarter_sort_key)
 
-        # Take top N quarters with all their documents
         result = []
         for quarter_key in sorted_quarters[:count]:
             result.extend(by_quarter[quarter_key])
 
         return result
+
+
+# Auto-register when module is imported
+SourceRegistry.register(ScreenerSource())

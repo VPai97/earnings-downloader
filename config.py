@@ -2,7 +2,8 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
+
 
 @dataclass
 class Config:
@@ -29,6 +30,14 @@ class Config:
 
     # Sources to try (in order)
     sources: List[str] = field(default_factory=lambda: ["screener"])
+
+    # API Keys (loaded from environment variables)
+    # Korea DART: Register at https://opendart.fss.or.kr/ (free)
+    dart_api_key: Optional[str] = field(default_factory=lambda: os.environ.get("DART_API_KEY"))
+
+    # Japan TDnet: Register at https://www.jpx-jquants.com/ (free tier available)
+    tdnet_api_id: Optional[str] = field(default_factory=lambda: os.environ.get("TDNET_API_ID"))
+    tdnet_api_password: Optional[str] = field(default_factory=lambda: os.environ.get("TDNET_API_PASSWORD"))
 
     def get_output_path(self, company: str) -> str:
         """Get output directory for a company."""

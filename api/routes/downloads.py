@@ -45,7 +45,7 @@ class DownloadRequest(BaseModel):
 async def get_documents(
     company: str = Query(..., description="Company name(s), comma-separated for multiple"),
     region: Optional[str] = Query("india", description="Region (india, us, japan, korea, china)"),
-    count: int = Query(5, ge=1, le=20, description="Number of quarters per company"),
+    count: int = Query(8, ge=1, le=40, description="Number of quarters per company (max 40 = 10 years)"),
     types: Optional[str] = Query(
         "transcript,presentation,press_release",
         description="Document types (comma-separated)"

@@ -9,7 +9,7 @@ from typing import List, Optional
 class Config:
     """Configuration settings."""
     output_dir: str = "./downloads"
-    quarters_per_company: int = 5
+    quarters_per_company: int = 8  # Default: 2 years. Max: 40 (10 years)
 
     # Document types to download
     include_transcripts: bool = True

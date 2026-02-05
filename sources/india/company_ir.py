@@ -9,7 +9,7 @@ from collections import defaultdict
 
 from ..base import BaseSource, Region, FiscalYearType
 from ..registry import SourceRegistry
-from core.models import EarningsCall, normalize_company_name
+from core.models import EarningsCall, normalize_company_name, find_best_company_match
 from config import config
 
 
@@ -77,9 +77,15 @@ class CompanyIRSource(BaseSource):
         """Find the investor relations page URL for a company."""
         normalized = normalize_company_name(company_name).lower()
 
+        # Direct/partial match
         for key, url in KNOWN_IR_PAGES.items():
             if key in normalized or normalized in key:
                 return url
+
+        # Fuzzy match
+        best_match = find_best_company_match(company_name, KNOWN_IR_PAGES, threshold=70)
+        if best_match:
+            return KNOWN_IR_PAGES[best_match]
 
         return None
 

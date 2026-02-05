@@ -10,7 +10,7 @@ from collections import defaultdict
 
 from ..base import BaseSource, Region, FiscalYearType
 from ..registry import SourceRegistry
-from core.models import EarningsCall, normalize_company_name
+from core.models import EarningsCall, normalize_company_name, fuzzy_match_company
 from config import config
 
 
@@ -114,6 +114,13 @@ class DartSource(BaseSource):
         for key, info in corp_codes.items():
             if normalized in key or key in normalized:
                 return info
+
+        # Fuzzy match
+        candidates = list(corp_codes.keys())
+        matches = fuzzy_match_company(query, candidates, threshold=70)
+        if matches:
+            best_match = matches[0][0]
+            return corp_codes[best_match]
 
         return None
 

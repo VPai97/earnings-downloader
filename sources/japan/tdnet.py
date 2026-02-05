@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from ..base import BaseSource, Region, FiscalYearType
 from ..registry import SourceRegistry
-from core.models import EarningsCall, normalize_company_name
+from core.models import EarningsCall, normalize_company_name, fuzzy_match_company
 from config import config
 
 
@@ -154,6 +154,13 @@ class TdnetSource(BaseSource):
         for key, info in companies.items():
             if isinstance(key, str) and (normalized in key or key in normalized):
                 return info
+
+        # Fuzzy match
+        candidates = [k for k in companies.keys() if isinstance(k, str)]
+        matches = fuzzy_match_company(query, candidates, threshold=70)
+        if matches:
+            best_match = matches[0][0]
+            return companies[best_match]
 
         return None
 

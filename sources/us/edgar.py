@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from ..base import BaseSource, Region, FiscalYearType
 from ..registry import SourceRegistry
-from core.models import EarningsCall, normalize_company_name
+from core.models import EarningsCall, normalize_company_name, fuzzy_match_company
 from config import config
 
 
@@ -67,6 +67,13 @@ class EdgarSource(BaseSource):
         for key, info in tickers.items():
             if normalized in key or key in normalized:
                 return info
+
+        # Fuzzy match
+        candidates = list(tickers.keys())
+        matches = fuzzy_match_company(company_name, candidates, threshold=70)
+        if matches:
+            best_match = matches[0][0]
+            return tickers[best_match]
 
         return None
 

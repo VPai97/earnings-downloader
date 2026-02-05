@@ -8,7 +8,7 @@ from datetime import datetime
 
 from ..base import BaseSource, Region, FiscalYearType
 from ..registry import SourceRegistry
-from core.models import EarningsCall, normalize_company_name
+from core.models import EarningsCall, normalize_company_name, find_best_company_match
 from config import config
 
 
@@ -87,6 +87,11 @@ class CninfoSource(BaseSource):
                 return info
             if normalized in info["name"].lower():
                 return info
+
+        # Fuzzy match
+        best_match = find_best_company_match(query, self.KNOWN_COMPANIES, threshold=70)
+        if best_match:
+            return self.KNOWN_COMPANIES[best_match]
 
         return None
 

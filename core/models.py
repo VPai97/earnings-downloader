@@ -1,9 +1,10 @@
 """Data models for earnings downloader."""
 
 import re
-from typing import Optional
+from typing import Optional, List, Tuple
 from datetime import datetime
 from pydantic import BaseModel, Field
+from rapidfuzz import fuzz, process
 
 
 class EarningsCall(BaseModel):
@@ -43,12 +44,75 @@ class EarningsCall(BaseModel):
 
 def normalize_company_name(name: str) -> str:
     """Normalize company name for searching."""
-    suffixes = [' Ltd', ' Limited', ' Ltd.', ' Inc', ' Inc.', ' Corp', ' Corporation']
+    suffixes = [
+        ' Ltd', ' Limited', ' Ltd.', ' Inc', ' Inc.', ' Corp', ' Corporation',
+        ' Co.', ' Co', ' Company', ' PLC', ' plc', ' NV', ' SA', ' AG', ' SE',
+        ' Holdings', ' Group', ' International', ' Intl',
+    ]
     normalized = name.strip()
     for suffix in suffixes:
         if normalized.lower().endswith(suffix.lower()):
             normalized = normalized[:-len(suffix)]
+    # Remove extra whitespace
+    normalized = ' '.join(normalized.split())
     return normalized.strip()
+
+
+def fuzzy_match_company(
+    query: str,
+    candidates: List[str],
+    threshold: int = 60
+) -> List[Tuple[str, int]]:
+    """
+    Fuzzy match a company name against a list of candidates.
+
+    Args:
+        query: Search query
+        candidates: List of company names to match against
+        threshold: Minimum match score (0-100)
+
+    Returns:
+        List of (company_name, score) tuples, sorted by score descending
+    """
+    if not candidates:
+        return []
+
+    normalized_query = normalize_company_name(query).lower()
+
+    # Use rapidfuzz for fuzzy matching
+    results = process.extract(
+        normalized_query,
+        candidates,
+        scorer=fuzz.WRatio,  # Weighted ratio handles partial matches well
+        limit=10
+    )
+
+    # Filter by threshold and return
+    return [(name, score) for name, score, _ in results if score >= threshold]
+
+
+def find_best_company_match(
+    query: str,
+    company_dict: dict,
+    threshold: int = 60
+) -> Optional[str]:
+    """
+    Find the best matching company key from a dictionary.
+
+    Args:
+        query: Search query
+        company_dict: Dictionary with company names/keys
+        threshold: Minimum match score
+
+    Returns:
+        Best matching key or None
+    """
+    candidates = list(company_dict.keys())
+    matches = fuzzy_match_company(query, candidates, threshold)
+
+    if matches:
+        return matches[0][0]  # Return the best match
+    return None
 
 
 def parse_quarter_year(text: str) -> tuple[Optional[str], Optional[str]]:

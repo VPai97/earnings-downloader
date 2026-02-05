@@ -133,19 +133,20 @@ def deduplicate_calls(calls: list[EarningsCall]) -> list[EarningsCall]:
     """Remove duplicate earnings calls, preferring certain sources."""
 
     # Priority: lower number = higher priority (preferred)
-    # 1. BSE/NSE official filings
-    # 2. Company IR pages
-    # 3. Aggregators (Screener, Trendlyne, etc.)
+    # 1. NSE/BSE official filings
+    # 2. Screener/Tijori (aggregators that link to exchange filings)
+    # 3. Company IR website (factsheets, additional materials)
     source_priority = {
         "bse": 0,
         "nse": 0,
-        "company_ir": 1,
-        "screener": 2,
-        "trendlyne": 3,
-        "edgar": 1,  # Official SEC filings
-        "tdnet": 1,  # Official Japan filings
-        "dart": 1,   # Official Korea filings
-        "cninfo": 1, # Official China filings
+        "screener": 1,
+        "trendlyne": 1,
+        "tijori": 1,
+        "company_ir": 2,
+        "edgar": 0,  # Official SEC filings (US)
+        "tdnet": 0,  # Official Japan filings
+        "dart": 0,   # Official Korea filings
+        "cninfo": 0, # Official China filings
     }
 
     # First pass: deduplicate by URL (exact same document)

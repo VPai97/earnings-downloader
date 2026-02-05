@@ -131,21 +131,40 @@ def parse_quarter_year(text: str) -> tuple[Optional[str], Optional[str]]:
 
 def deduplicate_calls(calls: list[EarningsCall]) -> list[EarningsCall]:
     """Remove duplicate earnings calls, preferring certain sources."""
-    seen = {}  # (company, quarter, year, doc_type) -> call
-    # Prefer company IR pages over aggregators
+
+    # Priority: lower number = higher priority (preferred)
+    # 1. BSE/NSE official filings
+    # 2. Company IR pages
+    # 3. Aggregators (Screener, Trendlyne, etc.)
     source_priority = {
-        "company_ir": 0,
-        "screener": 1,
-        "edgar": 2,
-        "tdnet": 3,
-        "dart": 4,
-        "cninfo": 5,
-        "trendlyne": 6,
-        "bse": 7
+        "bse": 0,
+        "nse": 0,
+        "company_ir": 1,
+        "screener": 2,
+        "trendlyne": 3,
+        "edgar": 1,  # Official SEC filings
+        "tdnet": 1,  # Official Japan filings
+        "dart": 1,   # Official Korea filings
+        "cninfo": 1, # Official China filings
     }
 
+    # First pass: deduplicate by URL (exact same document)
+    seen_urls = {}
     for call in calls:
-        key = (call.company.lower(), call.quarter, call.year, call.doc_type)
+        url_key = call.url.lower().rstrip('/')
+        if url_key not in seen_urls:
+            seen_urls[url_key] = call
+        else:
+            existing = seen_urls[url_key]
+            if source_priority.get(call.source, 99) < source_priority.get(existing.source, 99):
+                seen_urls[url_key] = call
+
+    # Second pass: deduplicate by (company, quarter, year, doc_type)
+    seen = {}  # (normalized_company, quarter, year, doc_type) -> call
+    for call in seen_urls.values():
+        # Normalize company name for better matching
+        normalized_company = normalize_company_name(call.company).lower()
+        key = (normalized_company, call.quarter, call.year, call.doc_type)
         if key not in seen:
             seen[key] = call
         else:

@@ -86,13 +86,10 @@ class EarningsService:
                     include_press_releases=include_press_releases
                 )
                 all_calls.extend(calls)
-
-                # If we have enough documents, stop trying other sources
-                if len(all_calls) >= count:
-                    break
             except Exception as e:
                 print(f"  Error from {source.source_name}: {e}")
 
+        # Deduplicate - keeps highest priority source for each document
         return deduplicate_calls(all_calls)
 
     def get_available_regions(self) -> List[dict]:

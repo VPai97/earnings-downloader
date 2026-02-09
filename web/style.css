@@ -137,6 +137,7 @@ form#search-form button { animation-delay: 0.2s; }
 
 .form-group.autocomplete {
     position: relative;
+    z-index: 30;
 }
 
 .form-group label {
@@ -182,18 +183,20 @@ select:focus {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
     max-height: 240px;
     overflow-y: auto;
-    z-index: 20;
+    z-index: 999;
+    padding: 6px 0;
 }
 
 .autocomplete-item {
-    padding: 8px 12px;
+    padding: 10px 14px;
     cursor: pointer;
     font-size: 0.95rem;
     color: var(--ink);
     border-bottom: 1px solid var(--border);
+    line-height: 1.4;
 }
 
 .autocomplete-item:last-child {

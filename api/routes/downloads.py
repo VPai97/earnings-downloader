@@ -4,6 +4,7 @@ import os
 import io
 import zipfile
 import asyncio
+import logging
 import aiohttp
 from typing import List, Optional
 from fastapi import APIRouter, Query, HTTPException
@@ -18,6 +19,7 @@ from config import config
 
 router = APIRouter(prefix="/api", tags=["downloads"])
 service = EarningsService()
+logger = logging.getLogger(__name__)
 
 
 class DocumentResponse(BaseModel):
@@ -100,7 +102,7 @@ async def fetch_file(session: aiohttp.ClientSession, url: str, filename: str) ->
                 content = await resp.read()
                 return (filename, content)
     except Exception as e:
-        print(f"  Error fetching {url}: {e}")
+        logger.warning("Error fetching %s: %s", url, e)
     return (filename, None)
 
 

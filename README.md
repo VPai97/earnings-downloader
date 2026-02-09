@@ -121,6 +121,17 @@ Some regions require free API registration:
 
 **No API key needed for:** India (Screener.in), US (SEC EDGAR), China (CNINFO)
 
+## Optional Environment Variables
+
+### BSE Scrip List (India autocomplete)
+Provide a local CSV to power company name suggestions in the web UI.
+
+```bash
+export BSE_SCRIP_PATH=/home/vignesh/Downloads/SCRIP/BSE_EQ_SCRIP_06022026.csv
+```
+
+Expected CSV headers: `Company name`, `symbol`, `ISIN`
+
 ## Dependencies
 
 - requests, beautifulsoup4, aiohttp, rich

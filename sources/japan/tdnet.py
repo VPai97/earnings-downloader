@@ -1,6 +1,7 @@
 """J-Quants/TDnet data source for Japanese company earnings documents."""
 
 import re
+import logging
 import requests
 from typing import List, Optional, Dict
 from collections import defaultdict
@@ -43,6 +44,7 @@ class TdnetSource(BaseSource):
         self._id_token: Optional[str] = None
         self._refresh_token: Optional[str] = None
         self._companies: Optional[Dict[str, dict]] = None
+        self._logger = logging.getLogger(__name__)
 
     def _get_credentials(self) -> tuple[Optional[str], Optional[str]]:
         """Get J-Quants credentials from config."""
@@ -55,9 +57,9 @@ class TdnetSource(BaseSource):
 
         api_id, api_password = self._get_credentials()
         if not api_id or not api_password:
-            print("  J-Quants API credentials not configured.")
-            print("  Set TDNET_API_ID and TDNET_API_PASSWORD environment variables.")
-            print("  Register for free at: https://www.jpx-jquants.com/")
+            self._logger.warning("J-Quants API credentials not configured.")
+            self._logger.warning("Set TDNET_API_ID and TDNET_API_PASSWORD environment variables.")
+            self._logger.warning("Register for free at: https://www.jpx-jquants.com/")
             return False
 
         try:
@@ -72,7 +74,7 @@ class TdnetSource(BaseSource):
             self._refresh_token = data.get("refreshToken")
 
             if not self._refresh_token:
-                print(f"  J-Quants auth failed: {data}")
+                self._logger.warning("J-Quants auth failed: %s", data)
                 return False
 
             # Get ID token
@@ -90,7 +92,7 @@ class TdnetSource(BaseSource):
                 return True
 
         except Exception as e:
-            print(f"  J-Quants authentication error: {e}")
+            self._logger.warning("J-Quants authentication error: %s", e)
 
         return False
 
@@ -130,10 +132,12 @@ class TdnetSource(BaseSource):
                     if name_en:
                         self._companies[name_en.lower()] = info
 
-            print(f"  Loaded {len(data.get('info', []))} Japanese companies from J-Quants")
+            self._logger.info(
+                "Loaded %s Japanese companies from J-Quants", len(data.get("info", []))
+            )
 
         except Exception as e:
-            print(f"  Error loading J-Quants companies: {e}")
+            self._logger.warning("Error loading J-Quants companies: %s", e)
             self._companies = {}
 
         return self._companies
@@ -194,7 +198,7 @@ class TdnetSource(BaseSource):
 
         company_info = self._find_company(company_name)
         if not company_info:
-            print(f"  Company not found in J-Quants: {company_name}")
+            self._logger.info("Company not found in J-Quants: %s", company_name)
             return calls
 
         code = company_info["code"]
@@ -250,7 +254,7 @@ class TdnetSource(BaseSource):
                     ))
 
         except Exception as e:
-            print(f"  Error fetching from J-Quants: {e}")
+            self._logger.warning("Error fetching from J-Quants: %s", e)
 
         return self._limit_by_quarter(calls, count)
 

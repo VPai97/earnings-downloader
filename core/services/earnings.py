@@ -1,5 +1,6 @@
 """Earnings document service - shared business logic for CLI and API."""
 
+import logging
 from typing import List, Optional
 
 from sources import SourceRegistry
@@ -17,6 +18,7 @@ class EarningsService:
         import sources.japan  # noqa: F401
         import sources.korea  # noqa: F401
         import sources.china  # noqa: F401
+        self._logger = logging.getLogger(__name__)
 
     def search_company(
         self,
@@ -87,7 +89,7 @@ class EarningsService:
                 )
                 all_calls.extend(calls)
             except Exception as e:
-                print(f"  Error from {source.source_name}: {e}")
+                self._logger.warning("Error from %s: %s", source.source_name, e)
 
         # Deduplicate - keeps highest priority source for each document
         return deduplicate_calls(all_calls)

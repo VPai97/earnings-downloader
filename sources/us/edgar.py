@@ -1,6 +1,7 @@
 """SEC EDGAR data source for US company earnings documents."""
 
 import re
+import logging
 import requests
 from typing import List, Optional
 from collections import defaultdict
@@ -33,6 +34,7 @@ class EdgarSource(BaseSource):
             "Accept-Encoding": "gzip, deflate",
         })
         self._ticker_cache = None
+        self._logger = logging.getLogger(__name__)
 
     def _load_ticker_data(self) -> dict:
         """Load SEC company tickers mapping."""
@@ -50,7 +52,7 @@ class EdgarSource(BaseSource):
                     self._ticker_cache[name] = {"cik": cik, "ticker": ticker, "name": info.get("title", "")}
                     self._ticker_cache[ticker.lower()] = {"cik": cik, "ticker": ticker, "name": info.get("title", "")}
             except Exception as e:
-                print(f"  Error loading SEC ticker data: {e}")
+                self._logger.warning("Error loading SEC ticker data: %s", e)
                 self._ticker_cache = {}
         return self._ticker_cache
 
@@ -113,7 +115,7 @@ class EdgarSource(BaseSource):
 
         company_info = self._find_company_cik(company_name)
         if not company_info:
-            print(f"  Company not found in SEC database: {company_name}")
+            self._logger.info("Company not found in SEC database: %s", company_name)
             return calls
 
         cik = company_info["cik"]
@@ -178,7 +180,7 @@ class EdgarSource(BaseSource):
                     ))
 
         except Exception as e:
-            print(f"  Error fetching from SEC EDGAR: {e}")
+            self._logger.warning("Error fetching from SEC EDGAR: %s", e)
 
         return self._limit_by_quarter(calls, count)
 

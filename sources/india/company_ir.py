@@ -1,6 +1,7 @@
 """Company Investor Relations website source for Indian company earnings documents."""
 
 import re
+import logging
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Optional, Tuple
@@ -60,6 +61,7 @@ class CompanyIRSource(BaseSource):
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
         })
+        self._logger = logging.getLogger(__name__)
 
     def search_company(self, query: str) -> Optional[dict]:
         """Search for company - only returns info for known companies."""
@@ -141,7 +143,7 @@ class CompanyIRSource(BaseSource):
         if not ir_url:
             return calls  # Silent return - Screener will be used as fallback
 
-        print(f"  Checking IR page: {ir_url}")
+        self._logger.info("Checking IR page: %s", ir_url)
 
         try:
             resp = self.session.get(ir_url, timeout=config.request_timeout)
@@ -225,7 +227,7 @@ class CompanyIRSource(BaseSource):
                 ))
 
         except Exception as e:
-            print(f"  Error fetching IR page: {e}")
+            self._logger.warning("Error fetching IR page: %s", e)
             return calls
 
         return self._limit_by_quarter(calls, count)

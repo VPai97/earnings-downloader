@@ -1,6 +1,7 @@
 """DART data source for Korean company earnings documents."""
 
 import re
+import logging
 import requests
 import zipfile
 import io
@@ -37,6 +38,7 @@ class DartSource(BaseSource):
             "User-Agent": config.user_agent,
         })
         self._corp_codes: Optional[Dict[str, dict]] = None
+        self._logger = logging.getLogger(__name__)
 
     def _get_api_key(self) -> Optional[str]:
         """Get DART API key from config."""
@@ -49,8 +51,8 @@ class DartSource(BaseSource):
 
         api_key = self._get_api_key()
         if not api_key:
-            print("  DART API key not configured. Set DART_API_KEY environment variable.")
-            print("  Register for free at: https://opendart.fss.or.kr/")
+            self._logger.warning("DART API key not configured. Set DART_API_KEY environment variable.")
+            self._logger.warning("Register for free at: https://opendart.fss.or.kr/")
             self._corp_codes = {}
             return self._corp_codes
 
@@ -90,10 +92,10 @@ class DartSource(BaseSource):
                             "stock_code": stock_code.strip()
                         }
 
-            print(f"  Loaded {len(self._corp_codes)} Korean companies from DART")
+            self._logger.info("Loaded %s Korean companies from DART", len(self._corp_codes))
 
         except Exception as e:
-            print(f"  Error loading DART corp codes: {e}")
+            self._logger.warning("Error loading DART corp codes: %s", e)
             self._corp_codes = {}
 
         return self._corp_codes
@@ -155,7 +157,7 @@ class DartSource(BaseSource):
 
         company_info = self._find_company(company_name)
         if not company_info:
-            print(f"  Company not found in DART: {company_name}")
+            self._logger.info("Company not found in DART: %s", company_name)
             return calls
 
         corp_code = company_info["corp_code"]
@@ -181,7 +183,7 @@ class DartSource(BaseSource):
             data = resp.json()
 
             if data.get("status") != "000":
-                print(f"  DART API error: {data.get('message', 'Unknown error')}")
+                self._logger.warning("DART API error: %s", data.get("message", "Unknown error"))
                 return calls
 
             disclosures = data.get("list", [])
@@ -222,7 +224,7 @@ class DartSource(BaseSource):
                 ))
 
         except Exception as e:
-            print(f"  Error fetching from DART: {e}")
+            self._logger.warning("Error fetching from DART: %s", e)
 
         return self._limit_by_quarter(calls, count)
 

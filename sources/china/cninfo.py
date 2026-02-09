@@ -1,6 +1,7 @@
 """CNINFO data source for Chinese company earnings documents."""
 
 import re
+import logging
 import requests
 from typing import List, Optional
 from collections import defaultdict
@@ -72,6 +73,7 @@ class CninfoSource(BaseSource):
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5,zh-CN;q=0.3",
         })
+        self._logger = logging.getLogger(__name__)
 
     def _find_company(self, query: str) -> Optional[dict]:
         """Find company by name or stock code."""
@@ -144,7 +146,7 @@ class CninfoSource(BaseSource):
 
         company_info = self._find_company(company_name)
         if not company_info:
-            print(f"  Company not found in Chinese database: {company_name}")
+            self._logger.info("Company not found in Chinese database: %s", company_name)
             return calls
 
         actual_name = company_info["name"]

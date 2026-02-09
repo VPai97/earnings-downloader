@@ -1,6 +1,7 @@
 """Screener.in data source for Indian company earnings documents."""
 
 import re
+import logging
 import requests
 from bs4 import BeautifulSoup
 from typing import List, Optional
@@ -31,6 +32,7 @@ class ScreenerSource(BaseSource):
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
         })
+        self._logger = logging.getLogger(__name__)
 
     def search_company(self, query: str) -> Optional[dict]:
         """Search for company and return its info."""
@@ -56,7 +58,7 @@ class ScreenerSource(BaseSource):
             }
 
         except Exception as e:
-            print(f"  Search error: {e}")
+            self._logger.warning("Search error: %s", e)
             return None
 
     def get_earnings_calls(
@@ -73,7 +75,7 @@ class ScreenerSource(BaseSource):
         # Search for company
         company_info = self.search_company(company_name)
         if not company_info:
-            print(f"  Company not found on Screener.in: {company_name}")
+            self._logger.info("Company not found on Screener.in: %s", company_name)
             return calls
 
         company_url = company_info["url"]
@@ -90,7 +92,7 @@ class ScreenerSource(BaseSource):
             # Find documents section
             doc_section = self._find_concall_section(soup)
             if not doc_section:
-                print(f"  No documents section found for {company_name}")
+                self._logger.info("No documents section found for %s", company_name)
                 return calls
 
             # Parse document entries
@@ -103,7 +105,7 @@ class ScreenerSource(BaseSource):
             calls.extend(entries)
 
         except Exception as e:
-            print(f"  Error fetching from Screener.in: {e}")
+            self._logger.warning("Error fetching from Screener.in: %s", e)
 
         return self._limit_by_quarter(calls, count)
 

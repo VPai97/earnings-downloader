@@ -76,13 +76,22 @@ class Downloader:
                 transient=False
             ) as progress:
                 tasks = []
+                task_map = {}
                 for call in calls:
                     task_id = progress.add_task(f"Downloading {call.get_filename()}...", total=1)
-                    task = self.download_file(session, call, output_dir, progress, task_id)
-                    tasks.append((call, task, task_id))
+                    task = asyncio.create_task(
+                        self.download_file(session, call, output_dir, progress, task_id)
+                    )
+                    tasks.append(task)
+                    task_map[task] = (call, task_id)
 
-                for call, task, task_id in tasks:
-                    success, path = await task
+                for task in asyncio.as_completed(tasks):
+                    call, task_id = task_map[task]
+                    try:
+                        success, path = await task
+                    except Exception:
+                        success, path = False, ""
+                        progress.update(task_id, description=f"[red]Error: {call.get_filename()}")
                     progress.update(task_id, completed=1)
                     results.append((call, success, path))
 

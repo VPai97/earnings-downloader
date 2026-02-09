@@ -14,15 +14,31 @@ const downloadAllBtn = document.getElementById('download-all-btn');
 const downloadStatus = document.getElementById('download-status');
 const statusMessage = document.getElementById('status-message');
 const searchBtn = document.getElementById('search-btn');
+const companyInput = document.getElementById('company');
+const regionSelect = document.getElementById('region');
+const suggestionsEl = document.getElementById('company-suggestions');
+
+let suggestionItems = [];
+let activeSuggestionIndex = -1;
+let suggestRequestId = 0;
 
 // Event Listeners
 searchForm.addEventListener('submit', handleSearch);
 downloadAllBtn.addEventListener('click', handleDownloadAll);
+companyInput.addEventListener('input', handleCompanyInput);
+companyInput.addEventListener('keydown', handleSuggestionKeys);
+companyInput.addEventListener('blur', () => setTimeout(hideSuggestions, 150));
+companyInput.addEventListener('focus', handleCompanyInput);
+regionSelect.addEventListener('change', () => {
+    if (companyInput.value.trim()) {
+        handleCompanyInput();
+    }
+});
 
 async function handleSearch(e) {
     e.preventDefault();
 
-    const company = document.getElementById('company').value.trim();
+    const company = sanitizeCompanyInput(companyInput.value.trim());
     const region = document.getElementById('region').value;
     const count = document.getElementById('count').value;
 
@@ -115,7 +131,7 @@ function displayResults(documents) {
 async function handleDownloadAll() {
     if (currentDocuments.length === 0) return;
 
-    const company = document.getElementById('company').value.trim();
+    const company = sanitizeCompanyInput(companyInput.value.trim());
     const region = document.getElementById('region').value;
 
     const typeCheckboxes = document.querySelectorAll('input[name="types"]:checked');
@@ -200,6 +216,151 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function sanitizeCompanyInput(value) {
+    if (!value) return value;
+    const parts = value.split(',');
+    const cleaned = parts.map(part => {
+        const trimmed = part.trim();
+        return trimmed.replace(/\s*\(([A-Z0-9&.\-]{1,15})\)\s*$/i, '').trim();
+    }).filter(Boolean);
+    return cleaned.join(', ');
+}
+
+function debounce(fn, delay) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+    };
+}
+
+const debouncedSuggest = debounce(fetchSuggestions, 250);
+
+function handleCompanyInput() {
+    debouncedSuggest();
+}
+
+function getCurrentToken(value) {
+    const parts = value.split(',');
+    return parts[parts.length - 1].trim();
+}
+
+function replaceCurrentToken(value, replacement) {
+    const parts = value.split(',');
+    if (parts.length === 1) {
+        return replacement;
+    }
+    const prefix = parts.slice(0, -1).map(part => part.trim()).filter(Boolean).join(', ');
+    if (!prefix) {
+        return replacement;
+    }
+    return `${prefix}, ${replacement}`;
+}
+
+async function fetchSuggestions() {
+    const query = getCurrentToken(companyInput.value);
+    if (!query) {
+        hideSuggestions();
+        return;
+    }
+
+    const requestId = ++suggestRequestId;
+    const params = new URLSearchParams({
+        q: query,
+        region: regionSelect.value || 'india',
+        limit: '20'
+    });
+
+    try {
+        const response = await fetch(`${API_BASE}/api/companies/suggest?${params}`);
+        if (!response.ok) {
+            hideSuggestions();
+            return;
+        }
+        const suggestions = await response.json();
+        if (requestId !== suggestRequestId) return;
+        renderSuggestions(suggestions);
+    } catch (error) {
+        console.error('Suggestion error:', error);
+        hideSuggestions();
+    }
+}
+
+function renderSuggestions(suggestions) {
+    suggestionsEl.innerHTML = '';
+    suggestionItems = Array.isArray(suggestions) ? suggestions : [];
+    activeSuggestionIndex = -1;
+
+    if (suggestionItems.length === 0) {
+        hideSuggestions();
+        return;
+    }
+
+    suggestionItems.forEach((item, index) => {
+        const option = document.createElement('div');
+        option.className = 'autocomplete-item';
+        option.setAttribute('role', 'option');
+        option.textContent = item.label || item.name || '';
+        option.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            selectSuggestion(index);
+        });
+        suggestionsEl.appendChild(option);
+    });
+
+    suggestionsEl.classList.remove('hidden');
+    companyInput.setAttribute('aria-expanded', 'true');
+}
+
+function hideSuggestions() {
+    suggestionsEl.classList.add('hidden');
+    suggestionsEl.innerHTML = '';
+    suggestionItems = [];
+    activeSuggestionIndex = -1;
+    companyInput.setAttribute('aria-expanded', 'false');
+}
+
+function handleSuggestionKeys(event) {
+    if (suggestionsEl.classList.contains('hidden')) {
+        return;
+    }
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveActiveSuggestion(1);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveActiveSuggestion(-1);
+    } else if (event.key === 'Enter') {
+        if (activeSuggestionIndex >= 0) {
+            event.preventDefault();
+            selectSuggestion(activeSuggestionIndex);
+        }
+    } else if (event.key === 'Escape') {
+        hideSuggestions();
+    }
+}
+
+function moveActiveSuggestion(delta) {
+    const items = suggestionsEl.querySelectorAll('.autocomplete-item');
+    if (!items.length) return;
+
+    activeSuggestionIndex = (activeSuggestionIndex + delta + items.length) % items.length;
+    items.forEach((item, index) => {
+        item.classList.toggle('active', index === activeSuggestionIndex);
+    });
+}
+
+function selectSuggestion(index) {
+    const selected = suggestionItems[index];
+    if (!selected) return;
+    const name = selected.name || selected.label || '';
+    if (!name) return;
+    companyInput.value = replaceCurrentToken(companyInput.value, name);
+    hideSuggestions();
+    companyInput.focus();
 }
 
 // Load available regions on page load

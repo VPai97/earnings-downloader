@@ -38,6 +38,7 @@ class BseScripStore:
             return True
 
         entries: List[Dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
         try:
             with open(self.path, "r", encoding="utf-8", newline="") as handle:
                 reader = csv.DictReader(handle)
@@ -48,12 +49,18 @@ class BseScripStore:
                     isin = normalized.get("isin") or ""
                     if not name:
                         continue
+                    name_norm = name.lower().strip()
+                    symbol_norm = symbol.lower().strip()
+                    key = (name_norm, symbol_norm)
+                    if key in seen:
+                        continue
+                    seen.add(key)
                     entry = {
                         "name": name,
                         "symbol": symbol,
                         "isin": isin,
-                        "name_norm": name.lower(),
-                        "symbol_norm": symbol.lower(),
+                        "name_norm": name_norm,
+                        "symbol_norm": symbol_norm,
                     }
                     entries.append(entry)
         except Exception as exc:
@@ -79,6 +86,7 @@ class BseScripStore:
             return []
 
         matches: List[Dict[str, str]] = []
+        seen_labels: set[str] = set()
         for entry in self._entries:
             if entry["name_norm"].startswith(normalized_query) or (
                 entry["symbol_norm"] and entry["symbol_norm"].startswith(normalized_query)
@@ -86,6 +94,9 @@ class BseScripStore:
                 label = entry["name"]
                 if entry["symbol"]:
                     label = f"{entry['name']} ({entry['symbol']})"
+                if label in seen_labels:
+                    continue
+                seen_labels.add(label)
                 matches.append({
                     "name": entry["name"],
                     "symbol": entry["symbol"],

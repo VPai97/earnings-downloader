@@ -127,7 +127,7 @@ Some regions require free API registration:
 Provide a local CSV to power company name suggestions in the web UI.
 
 ```bash
-export BSE_SCRIP_PATH=/home/vignesh/Downloads/SCRIP/BSE_EQ_SCRIP_06022026.csv
+export BSE_SCRIP_PATH=/home/vignesh/Documents/SCRIP/updated.csv
 ```
 
 Expected CSV headers: `Company name`, `symbol`, `ISIN`

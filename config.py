@@ -63,7 +63,7 @@ class Config:
     bse_scrip_path: str = field(
         default_factory=lambda: os.environ.get(
             "BSE_SCRIP_PATH",
-            "/home/vignesh/Downloads/SCRIP/BSE_EQ_SCRIP_06022026.csv",
+            "/home/vignesh/Documents/SCRIP/updated.csv",
         )
     )
 
